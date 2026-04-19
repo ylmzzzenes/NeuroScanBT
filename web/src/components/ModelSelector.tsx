@@ -22,12 +22,6 @@ const options: {
     accent: "from-neuro-violet/20 to-transparent",
   },
   {
-    id: "cvat",
-    title: "CVAT Cls+Seg",
-    subtitle: "Yeni COCO · sınıf + maske",
-    accent: "from-emerald-500/20 to-transparent",
-  },
-  {
     id: "compare",
     title: "İkili çalıştır",
     subtitle: "Yan yana karşılaştır",
@@ -45,7 +39,7 @@ export function ModelSelector({
   disabled?: boolean;
 }) {
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
       {options.map((opt) => {
         const on = value === opt.id;
         return (

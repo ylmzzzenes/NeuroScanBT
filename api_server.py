@@ -13,7 +13,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from PIL import Image, UnidentifiedImageError
 
 import inference
-import inference_coco
 from inference import (
     ApiModelId,
     api_id_to_model_key,
@@ -43,11 +42,6 @@ def _startup_load() -> None:
         inference.load_mycnn()
     except Exception:
         inference.mycnn_model = None
-    try:
-        inference_coco.load_coco_models()
-    except Exception:
-        inference_coco.cls_model = None
-        inference_coco.seg_model = None
 
 
 @app.on_event("startup")
@@ -104,45 +98,7 @@ def _build_payload(
         "segmentation_overlay_png_base64": None,
         "cls_seg_conflict": False,
         "model_display_name": "ResNet18" if api_model == "pretrained" else "MyCNN",
-    }
-
-
-def _build_payload_cvat(pil: Image.Image) -> dict[str, Any]:
-    if inference_coco.cls_model is None or inference_coco.seg_model is None:
-        raise HTTPException(
-            status_code=503,
-            detail={
-                "code": "MODEL_UNAVAILABLE",
-                "message": "CVAT (ResNet+U-Net) ağırlıkları yüklenemedi",
-                "path_cls": inference_coco.CLS_PATH,
-                "path_seg": inference_coco.SEG_PATH,
-            },
-        )
-    raw = inference_coco.predict_cvat_pil(pil)
-    lo, hi = wilson_ci(raw["hemorrhage_probability"])
-    lo, hi = round(lo, 4), round(hi, 4)
-    risk = risk_level_from_probs(
-        raw["predicted_class"],
-        raw["hemorrhage_probability"],
-        raw["confidence_percent"],
-    )
-    return {
-        "model": "cvat",
-        "label": raw["predicted_class"],
-        "label_display": _label_display(raw["predicted_class"]),
-        "confidence_percent": raw["confidence_percent"],
-        "hemorrhage_probability": raw["hemorrhage_probability"],
-        "no_hemorrhage_probability": raw["no_hemorrhage_probability"],
-        "confidence_interval": {
-            "low": lo,
-            "high": hi,
-            "label": "95% approximate interval (Wilson score, hemorrhage probability)",
-        },
-        "risk_level": risk,
-        "heatmap_png_base64": raw["segmentation_overlay_png_base64"],
-        "segmentation_overlay_png_base64": raw["segmentation_overlay_png_base64"],
-        "cls_seg_conflict": raw["cls_seg_conflict"],
-        "model_display_name": raw["model_display_name"],
+        "debug": raw.get("debug"),
     }
 
 
@@ -154,7 +110,6 @@ def health() -> dict[str, Any]:
         "models": {
             "pretrained": inference.resnet_model is not None,
             "custom": inference.mycnn_model is not None,
-            "cvat": inference_coco.cls_model is not None and inference_coco.seg_model is not None,
         },
     }
 
@@ -162,7 +117,7 @@ def health() -> dict[str, Any]:
 @app.post("/api/predict")
 async def predict(
     file: UploadFile = File(...),
-    model: Literal["pretrained", "custom", "cvat"] = Form("pretrained"),
+    model: Literal["pretrained", "custom"] = Form("pretrained"),
     include_heatmap: bool = Form(True),
 ) -> dict[str, Any]:
     if not file.content_type or not file.content_type.startswith("image/"):
@@ -194,8 +149,6 @@ async def predict(
 
     try:
         rgb = pil.convert("RGB")
-        if model == "cvat":
-            return _build_payload_cvat(rgb)
         return _build_payload(rgb, model, include_heatmap)
     except HTTPException:
         raise

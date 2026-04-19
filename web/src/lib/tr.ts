@@ -12,6 +12,5 @@ export const GUVEN_ARALIGI_ACIKLAMA =
 export function modelAnahtarTr(key: string): string {
   if (key === "pretrained") return "Önceden eğitilmiş";
   if (key === "custom") return "Özel CNN";
-  if (key === "cvat") return "CVAT (Cls+Seg)";
   return key;
 }

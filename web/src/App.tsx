@@ -75,12 +75,6 @@ export default function App() {
       setError("Özel CNN sunucuda yüklü değil (.pth eksik).");
       return;
     }
-    if (runMode === "cvat" && !h.models.cvat) {
-      setError(
-        "CVAT modeli yüklü değil. Ağırlıkları weights/ altına koyun veya NEURO_CLS_WEIGHTS / NEURO_SEG_WEIGHTS ayarlayın."
-      );
-      return;
-    }
     if (runMode === "compare" && !h.models.pretrained && !h.models.custom) {
       setError("Karşılaştırma için en az bir model gerekli.");
       return;
@@ -110,7 +104,7 @@ export default function App() {
     if (m === "compare") return health.models.pretrained || health.models.custom;
     if (m === "pretrained") return health.models.pretrained;
     if (m === "custom") return health.models.custom;
-    return health.models.cvat;
+    return false;
   };
 
   return (
@@ -137,7 +131,6 @@ export default function App() {
                   label="Önceden eğitilmiş"
                 />
                 <StatusPill ok={health.models.custom} label="Özel CNN" />
-                <StatusPill ok={health.models.cvat} label="CVAT Cls+Seg" />
                 <span className="rounded-lg border border-white/10 bg-white/[0.03] px-2 py-1 text-[10px] text-slate-500">
                   {health.device}
                 </span>

@@ -1,6 +1,6 @@
 const API_BASE = import.meta.env.VITE_API_BASE ?? "";
 
-export type ModelId = "pretrained" | "custom" | "cvat";
+export type ModelId = "pretrained" | "custom";
 
 export interface PredictionPayload {
   model: ModelId;
@@ -22,12 +22,16 @@ export interface PredictionPayload {
   cls_seg_conflict?: boolean;
   /** İnsan okunaklı model adı */
   model_display_name?: string;
+  /** CVAT: segmentasyon PNG gerçekten üretildi mi */
+  segmentation_overlay_shown?: boolean;
+  /** Geliştirici: sınıf olasılıkları, indeksler, karar kuralı */
+  debug?: Record<string, unknown>;
 }
 
 export interface HealthResponse {
   ok: boolean;
   device: string;
-  models: { pretrained: boolean; custom: boolean; cvat: boolean };
+  models: { pretrained: boolean; custom: boolean };
 }
 
 export interface CompareResponse {

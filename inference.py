@@ -1,5 +1,11 @@
 """
 Paylaşılan beyin BT kanama sınıflandırma çıkarımı — masaüstü ve API için.
+
+Eski best_resnet18.pth / best_mycnn_v2.pth: ImageFolder eğitimi ile uyumlu
+  ön işleme (Resize + ToTensor, normalize yok) ve checkpoint’ten veya
+  varsayılan olarak legacy sınıf indeksi (hemorrhage = 0).
+
+Checkpoint dict içinde label_map varsa hemorrhage indeksi oradan okunur.
 """
 from __future__ import annotations
 
@@ -15,20 +21,24 @@ import torch.nn as nn
 from PIL import Image
 from torchvision import models, transforms
 
+from class_labels import (
+    class_name_from_index,
+    load_state_dict_and_hemorrhage_index,
+)
+
 _SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 RESNET_PATH = os.path.join(_SCRIPT_DIR, "best_resnet18.pth")
 MYCNN_PATH = os.path.join(_SCRIPT_DIR, "best_mycnn_v2.pth")
 
 IMG_SIZE = 224
-CLASS_NAMES = ["hemorrhage", "no_hemorrhage"]
-HEMORRHAGE_THRESHOLD = 0.45
 
 ModelKey = Literal["ResNet18", "MyCNN"]
-ApiModelId = Literal["pretrained", "custom", "cvat"]
+ApiModelId = Literal["pretrained", "custom"]
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-transform = transforms.Compose(
+# train_pretrained.py val_test_transform ile aynı: Resize + ToTensor (RGB, [0,1])
+legacy_eval_transform = transforms.Compose(
     [
         transforms.Resize((IMG_SIZE, IMG_SIZE)),
         transforms.ToTensor(),
@@ -37,9 +47,8 @@ transform = transforms.Compose(
 
 resnet_model: nn.Module | None = None
 mycnn_model: nn.Module | None = None
-
-# ImageFolder (alfabetik): 0 = hemorrhage, 1 = no_hemorrhage
-HEMORRHAGE_CLASS_IDX = 0
+RESNET_HEM_IDX: int = 0
+MYCNN_HEM_IDX: int = 0
 
 
 def _state_dict_from_checkpoint(blob: Any) -> Any:
@@ -91,12 +100,13 @@ class MyCNN(nn.Module):
 
 
 def load_resnet() -> nn.Module:
-    global resnet_model
+    global resnet_model, RESNET_HEM_IDX
     model = models.resnet18(weights=None)
     num_features = model.fc.in_features
     model.fc = nn.Linear(num_features, 2)
     blob = torch.load(RESNET_PATH, map_location=device)
-    model.load_state_dict(_state_dict_from_checkpoint(blob))
+    state, RESNET_HEM_IDX = load_state_dict_and_hemorrhage_index(blob)
+    model.load_state_dict(state)
     model = model.to(device)
     model.eval()
     resnet_model = model
@@ -104,10 +114,11 @@ def load_resnet() -> nn.Module:
 
 
 def load_mycnn() -> nn.Module:
-    global mycnn_model
+    global mycnn_model, MYCNN_HEM_IDX
     model = MyCNN()
     blob = torch.load(MYCNN_PATH, map_location=device)
-    model.load_state_dict(_state_dict_from_checkpoint(blob))
+    state, MYCNN_HEM_IDX = load_state_dict_and_hemorrhage_index(blob)
+    model.load_state_dict(state)
     model = model.to(device)
     model.eval()
     mycnn_model = model
@@ -120,6 +131,10 @@ def api_id_to_model_key(api_id: ApiModelId) -> ModelKey:
 
 def model_for_key(name: ModelKey) -> nn.Module | None:
     return resnet_model if name == "ResNet18" else mycnn_model
+
+
+def hemorrhage_index_for_model(key: ModelKey) -> int:
+    return RESNET_HEM_IDX if key == "ResNet18" else MYCNN_HEM_IDX
 
 
 def wilson_ci(p: float, n: int = 40, z: float = 1.96) -> Tuple[float, float]:
@@ -144,31 +159,33 @@ def risk_level_from_probs(
 
 
 def predict_tensor(
-    model: nn.Module, selected_model_name: ModelKey, input_tensor: torch.Tensor
-) -> Tuple[str, float, float, float]:
-    hem_idx = HEMORRHAGE_CLASS_IDX
-    no_idx = 1 - hem_idx
-
+    model: nn.Module,
+    selected_model_name: ModelKey,
+    input_tensor: torch.Tensor,
+    hem_idx: int,
+) -> Tuple[str, float, float, float, dict[str, Any]]:
+    """Karar: softmax argmax (eğitim / val ile aynı mantık; sabit threshold yok)."""
     with torch.no_grad():
         outputs = model(input_tensor)
         probs = torch.softmax(outputs, dim=1)[0]
 
-    hemorrhage_prob = probs[hem_idx].item()
-    no_hemorrhage_prob = probs[no_idx].item()
+    p_list = [float(probs[i].item()) for i in range(probs.shape[0])]
+    pred = int(torch.argmax(probs).item())
+    predicted_class = class_name_from_index(pred, hem_idx)
+    hemorrhage_prob = float(probs[hem_idx].item())
+    no_idx = 1 - hem_idx if probs.shape[0] == 2 else (1 if hem_idx == 0 else 0)
+    no_hemorrhage_prob = float(probs[no_idx].item()) if probs.shape[0] == 2 else float("nan")
+    confidence = float(probs[pred].item() * 100.0)
 
-    if selected_model_name == "ResNet18":
-        pred = int(torch.argmax(probs).item())
-        predicted_class = "hemorrhage" if pred == hem_idx else "no_hemorrhage"
-        confidence = probs[pred].item() * 100
-    else:
-        if hemorrhage_prob >= HEMORRHAGE_THRESHOLD:
-            predicted_class = "hemorrhage"
-            confidence = hemorrhage_prob * 100
-        else:
-            predicted_class = "no_hemorrhage"
-            confidence = no_hemorrhage_prob * 100
-
-    return predicted_class, confidence, hemorrhage_prob, no_hemorrhage_prob
+    debug = {
+        "raw_class_probabilities": p_list,
+        "predicted_class_index": pred,
+        "hemorrhage_class_index": hem_idx,
+        "threshold_used": None,
+        "decision_rule": "argmax",
+        "final_decision": predicted_class,
+    }
+    return predicted_class, confidence, hemorrhage_prob, no_hemorrhage_prob, debug
 
 
 def predict_image_pil(pil_image: Image.Image, selected_model_name: ModelKey) -> dict[str, Any]:
@@ -179,15 +196,16 @@ def predict_image_pil(pil_image: Image.Image, selected_model_name: ModelKey) -> 
             f"{selected_model_name} yüklenemedi. Ağırlık dosyası bekleniyor: {path}"
         )
 
+    hem_idx = hemorrhage_index_for_model(selected_model_name)
     image = pil_image.convert("RGB")
-    input_tensor = transform(image).unsqueeze(0).to(device)
-    predicted_class, confidence, hemorrhage_prob, no_hemorrhage_prob = predict_tensor(
-        model, selected_model_name, input_tensor
+    input_tensor = legacy_eval_transform(image).unsqueeze(0).to(device)
+    predicted_class, confidence, hemorrhage_prob, no_hemorrhage_prob, dbg = predict_tensor(
+        model, selected_model_name, input_tensor, hem_idx
     )
     lo, hi = wilson_ci(hemorrhage_prob)
     risk = risk_level_from_probs(predicted_class, hemorrhage_prob, confidence)
 
-    return {
+    out: dict[str, Any] = {
         "predicted_class": predicted_class,
         "confidence_percent": round(confidence, 2),
         "hemorrhage_probability": round(hemorrhage_prob, 6),
@@ -195,7 +213,9 @@ def predict_image_pil(pil_image: Image.Image, selected_model_name: ModelKey) -> 
         "confidence_interval_low": round(lo, 4),
         "confidence_interval_high": round(hi, 4),
         "risk_level": risk,
+        "debug": dbg,
     }
+    return out
 
 
 def predict_image_path(image_path: str, selected_model_name: ModelKey) -> dict[str, Any]:
@@ -216,14 +236,13 @@ def predict_image(image_path: str, selected_model_name: str) -> Tuple[str, float
 
 
 def grad_saliency_overlay_png(pil_image: Image.Image, selected_model_name: ModelKey) -> str | None:
-    """Basit gradyan önem haritası — orijinal üzerine renkli bindirme, base64 PNG."""
+    """Gradyan önem haritası — predict ile aynı ön işleme (legacy_eval_transform)."""
     model = model_for_key(selected_model_name)
     if model is None:
         return None
 
     image = pil_image.convert("RGB")
-    small = image.resize((IMG_SIZE, IMG_SIZE), Image.Resampling.BILINEAR)
-    t = transforms.ToTensor()(small).unsqueeze(0).to(device)
+    t = legacy_eval_transform(image).unsqueeze(0).to(device)
     t.requires_grad_(True)
     model.eval()
     out = model(t)
