@@ -2,8 +2,7 @@
 Paylaşılan beyin BT kanama sınıflandırma çıkarımı — masaüstü ve API için.
 
 Eski best_resnet18.pth / best_mycnn_v2.pth: ImageFolder eğitimi ile uyumlu
-  ön işleme (Resize + ToTensor, normalize yok) ve checkpoint’ten veya
-  varsayılan olarak legacy sınıf indeksi (hemorrhage = 0).
+  ön işleme (Resize + ToTensor). ImageFolder: 0=hemorrhage, 1=no_hemorrhage.
 
 Checkpoint dict içinde label_map varsa hemorrhage indeksi oradan okunur.
 """
@@ -37,8 +36,8 @@ ApiModelId = Literal["pretrained", "custom"]
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# train_pretrained.py val_test_transform ile aynı: Resize + ToTensor (RGB, [0,1])
-legacy_eval_transform = transforms.Compose(
+# Eğitim betikleriyle aynı doğrulama dönüşümü (Resize + ToTensor)
+eval_transform = transforms.Compose(
     [
         transforms.Resize((IMG_SIZE, IMG_SIZE)),
         transforms.ToTensor(),
@@ -49,12 +48,6 @@ resnet_model: nn.Module | None = None
 mycnn_model: nn.Module | None = None
 RESNET_HEM_IDX: int = 0
 MYCNN_HEM_IDX: int = 0
-
-
-def _state_dict_from_checkpoint(blob: Any) -> Any:
-    if isinstance(blob, dict) and "model_state" in blob:
-        return blob["model_state"]
-    return blob
 
 
 class MyCNN(nn.Module):
@@ -198,7 +191,7 @@ def predict_image_pil(pil_image: Image.Image, selected_model_name: ModelKey) -> 
 
     hem_idx = hemorrhage_index_for_model(selected_model_name)
     image = pil_image.convert("RGB")
-    input_tensor = legacy_eval_transform(image).unsqueeze(0).to(device)
+    input_tensor = eval_transform(image).unsqueeze(0).to(device)
     predicted_class, confidence, hemorrhage_prob, no_hemorrhage_prob, dbg = predict_tensor(
         model, selected_model_name, input_tensor, hem_idx
     )
@@ -236,13 +229,13 @@ def predict_image(image_path: str, selected_model_name: str) -> Tuple[str, float
 
 
 def grad_saliency_overlay_png(pil_image: Image.Image, selected_model_name: ModelKey) -> str | None:
-    """Gradyan önem haritası — predict ile aynı ön işleme (legacy_eval_transform)."""
+    """Gradyan önem haritası — predict ile aynı ön işleme (eval_transform)."""
     model = model_for_key(selected_model_name)
     if model is None:
         return None
 
     image = pil_image.convert("RGB")
-    t = legacy_eval_transform(image).unsqueeze(0).to(device)
+    t = eval_transform(image).unsqueeze(0).to(device)
     t.requires_grad_(True)
     model.eval()
     out = model(t)

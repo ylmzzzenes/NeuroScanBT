@@ -1,4 +1,4 @@
-Model: ResNet-18 (train_pretrained.py)
+Model: ResNet-18 (training/train_resnet18.py)
 Classes (index order): ['hemorrhage', 'no_hemorrhage']
 Positive class for Precision/Recall: hemorrhage (index 0)
 

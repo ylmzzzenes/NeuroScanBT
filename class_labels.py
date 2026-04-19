@@ -1,29 +1,15 @@
 """
-İkili sınıflandırma: checkpoint label_map ve legacy ImageFolder indeksleri.
+Checkpoint label_map ve düz state_dict ile ImageFolder indeks uyumu.
 
-Eski manifest/COCO eğitiminde: 0 = no_hemorrhage, 1 = hemorrhage (label_map).
-ImageFolder (alfabetik): 0 = hemorrhage, 1 = no_hemorrhage.
+Düz .pth (ImageFolder): 0 = hemorrhage, 1 = no_hemorrhage (alfabetik klasör).
+Eski dict checkpoint (model_state + label_map): indeks label_map’ten okunur.
 """
 from __future__ import annotations
 
 from typing import Any
 
-IDX_NO_HEMORRHAGE = 0
 IDX_HEMORRHAGE = 1
-
-# Eski .pt meta alanında bulunabilir
-COCO_LABEL_MAP: dict[str, str] = {
-    "0": "no_hemorrhage",
-    "1": "hemorrhage",
-}
-
 LEGACY_IDX_HEMORRHAGE = 0
-LEGACY_IDX_NO_HEMORRHAGE = 1
-
-LEGACY_LABEL_MAP: dict[str, str] = {
-    "0": "hemorrhage",
-    "1": "no_hemorrhage",
-}
 
 
 def hemorrhage_class_index_from_checkpoint(ck: dict[str, Any]) -> int:

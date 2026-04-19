@@ -1,4 +1,4 @@
-Model: MyCNN (mycnn_pre.py)
+Model: MyCNN (training/train_mycnn.py)
 Classes (index order): ['hemorrhage', 'no_hemorrhage']
 Positive class for Precision/Recall: hemorrhage (index 0)
 

@@ -4,13 +4,15 @@ NeuroScan / beyin BT kanama — proje düzeni
 Kök (çalıştırılabilir)
   api_server.py       FastAPI REST API
   inference.py        ResNet18 / MyCNN çıkarımı
-  class_labels.py     Sınıf indeksi / checkpoint label_map yardımcıları
+  class_labels.py     Sınıf indeksi / checkpoint label_map
   arayuz.py           Tkinter masaüstü arayüzü
 
-web/                  React (Vite) ön yüz — cd web && npm install
-weights/              İsteğe bağlı ek ağırlık notları (README)
-legacy/               Eski ImageFolder eğitim betikleri (train_pretrained, mycnn_pre)
-training_outputs/     Eğitim sonrası üretilen PNG + metrik txt (betik çalışınca oluşur)
+training/
+  train_resnet18.py   ImageFolder → best_resnet18.pth
+  train_mycnn.py      ImageFolder → best_mycnn_v2.pth
+
+web/                  React (Vite) — cd web && npm install
+training_outputs/     Eğitim sonrası PNG + metrik txt (betik çalışınca güncellenir)
 
 Ortak komutlar
   pip install -r requirements.txt
