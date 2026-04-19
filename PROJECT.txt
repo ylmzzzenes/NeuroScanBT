@@ -9,7 +9,8 @@ Kök (çalıştırılabilir)
 
 web/                  React (Vite) ön yüz — cd web && npm install
 weights/              İsteğe bağlı ek ağırlık notları (README)
-legacy/               Eski sabit yollu taslak betikler
+legacy/               Eski ImageFolder eğitim betikleri (train_pretrained, mycnn_pre)
+training_outputs/     Eğitim sonrası üretilen PNG + metrik txt (betik çalışınca oluşur)
 
 Ortak komutlar
   pip install -r requirements.txt

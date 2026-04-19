@@ -1,20 +1,36 @@
+"""
+ResNet-18 ImageFolder eğitimi. Çıktılar: training_outputs/ altında PNG + metrik txt.
+Veri yolu: proje kökünde split_dataset/ veya ortam değişkeni TRAIN_DATA_DIR.
+"""
 import os
 import copy
 import time
+from pathlib import Path
+
+import matplotlib.pyplot as plt
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
-import matplotlib.pyplot as plt
-
-from torchvision import datasets, transforms, models
+from sklearn.metrics import (
+    accuracy_score,
+    classification_report,
+    confusion_matrix,
+    precision_score,
+    recall_score,
+)
 from torch.utils.data import DataLoader
-from sklearn.metrics import confusion_matrix, classification_report, accuracy_score, precision_score, recall_score
+from torchvision import datasets, models, transforms
 
 # ==============================
-# AYARLAR
+# YOLLAR
 # ==============================
-data_dir = r"C:\Users\m42ay\Desktop\archive\split_dataset"
-model_save_path = r"C:\Users\m42ay\Desktop\archive\best_resnet18.pth"
+_ROOT = Path(__file__).resolve().parents[1]
+OUT_DIR = _ROOT / "training_outputs"
+OUT_DIR.mkdir(parents=True, exist_ok=True)
+
+data_dir = os.environ.get("TRAIN_DATA_DIR", str(_ROOT / "split_dataset"))
+model_save_path = str(_ROOT / "best_resnet18.pth")
 
 IMG_SIZE = 224
 BATCH_SIZE = 16
@@ -24,22 +40,28 @@ PATIENCE = 4
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print("Kullanılan cihaz:", device)
+print("Veri klasörü:", data_dir)
+print("Çıktı klasörü:", OUT_DIR)
 
 # ==============================
 # DATA AUGMENTATION + TRANSFORMS
 # ==============================
-train_transform = transforms.Compose([
-    transforms.Resize((IMG_SIZE, IMG_SIZE)),
-    transforms.RandomHorizontalFlip(),
-    transforms.RandomRotation(10),
-    transforms.ColorJitter(brightness=0.1, contrast=0.1),
-    transforms.ToTensor(),
-])
+train_transform = transforms.Compose(
+    [
+        transforms.Resize((IMG_SIZE, IMG_SIZE)),
+        transforms.RandomHorizontalFlip(),
+        transforms.RandomRotation(10),
+        transforms.ColorJitter(brightness=0.1, contrast=0.1),
+        transforms.ToTensor(),
+    ]
+)
 
-val_test_transform = transforms.Compose([
-    transforms.Resize((IMG_SIZE, IMG_SIZE)),
-    transforms.ToTensor(),
-])
+val_test_transform = transforms.Compose(
+    [
+        transforms.Resize((IMG_SIZE, IMG_SIZE)),
+        transforms.ToTensor(),
+    ]
+)
 
 # ==============================
 # DATASET
@@ -60,7 +82,6 @@ print("Sınıflar:", class_names)
 # ==============================
 model = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
 
-# Son katmanı değiştir
 num_features = model.fc.in_features
 model.fc = nn.Linear(num_features, 2)
 
@@ -73,7 +94,7 @@ criterion = nn.CrossEntropyLoss()
 optimizer = optim.Adam(model.parameters(), lr=LR)
 
 # ==============================
-# EĞİTİM FONKSİYONU
+# EĞİTİM
 # ==============================
 train_losses = []
 val_losses = []
@@ -85,10 +106,9 @@ best_model_wts = copy.deepcopy(model.state_dict())
 early_stop_counter = 0
 
 for epoch in range(EPOCHS):
-    print(f"\nEpoch {epoch+1}/{EPOCHS}")
+    print(f"\nEpoch {epoch + 1}/{EPOCHS}")
     print("-" * 30)
 
-    # ===== TRAIN =====
     model.train()
     running_loss = 0.0
     running_corrects = 0
@@ -117,7 +137,6 @@ for epoch in range(EPOCHS):
     train_losses.append(epoch_train_loss)
     train_accuracies.append(epoch_train_acc)
 
-    # ===== VALIDATION =====
     model.eval()
     running_loss = 0.0
     running_corrects = 0
@@ -145,7 +164,6 @@ for epoch in range(EPOCHS):
     print(f"Train Loss: {epoch_train_loss:.4f} | Train Acc: {epoch_train_acc:.4f}")
     print(f"Val   Loss: {epoch_val_loss:.4f} | Val   Acc: {epoch_val_acc:.4f}")
 
-    # ===== EARLY STOPPING =====
     if epoch_val_loss < best_val_loss:
         best_val_loss = epoch_val_loss
         best_model_wts = copy.deepcopy(model.state_dict())
@@ -160,7 +178,6 @@ for epoch in range(EPOCHS):
         print("Early stopping tetiklendi.")
         break
 
-# En iyi ağırlıkları yükle
 model.load_state_dict(best_model_wts)
 
 # ==============================
@@ -182,39 +199,99 @@ with torch.no_grad():
         all_preds.extend(preds.cpu().numpy())
 
 acc = accuracy_score(all_labels, all_preds)
-prec = precision_score(all_labels, all_preds)
-rec = recall_score(all_labels, all_preds)
-cm = confusion_matrix(all_labels, all_preds)
+# ImageFolder alfabetik: genelde 0=hemorrhage — ikili metrikler için pozitif sınıf 0
+hemorrhage_idx = 0
+prec = precision_score(
+    all_labels, all_preds, average="binary", pos_label=hemorrhage_idx, zero_division=0
+)
+rec = recall_score(
+    all_labels, all_preds, average="binary", pos_label=hemorrhage_idx, zero_division=0
+)
+cm = confusion_matrix(all_labels, all_preds, labels=[0, 1])
 
 print("\nTEST SONUÇLARI")
 print("Accuracy :", acc)
-print("Precision:", prec)
-print("Recall   :", rec)
+print("Precision (hemorrhage):", prec)
+print("Recall (hemorrhage):", rec)
 print("\nConfusion Matrix:")
 print(cm)
 
-print("\nClassification Report:")
-print(classification_report(all_labels, all_preds, target_names=class_names))
+# ==============================
+# PNG: eğitim eğrileri
+# ==============================
+prefix = "resnet18"
+epochs_x = range(1, len(train_losses) + 1)
 
-# ==============================
-# GRAFİKLER
-# ==============================
-plt.figure(figsize=(8, 5))
-plt.plot(train_losses, label="Train Loss")
-plt.plot(val_losses, label="Validation Loss")
+plt.figure(figsize=(9, 5))
+plt.plot(epochs_x, train_losses, label="Train Loss", marker="o", markersize=3)
+plt.plot(epochs_x, val_losses, label="Validation Loss", marker="s", markersize=3)
 plt.xlabel("Epoch")
 plt.ylabel("Loss")
-plt.title("Loss Grafiği")
+plt.title("ResNet-18 — Train / Validation Loss")
 plt.legend()
-plt.grid()
-plt.show()
+plt.grid(True, alpha=0.3)
+plt.tight_layout()
+plt.savefig(OUT_DIR / f"{prefix}_train_val_loss.png", dpi=150)
+plt.close()
 
-plt.figure(figsize=(8, 5))
-plt.plot(train_accuracies, label="Train Accuracy")
-plt.plot(val_accuracies, label="Validation Accuracy")
+plt.figure(figsize=(9, 5))
+plt.plot(epochs_x, train_accuracies, label="Train Accuracy", marker="o", markersize=3)
+plt.plot(epochs_x, val_accuracies, label="Validation Accuracy", marker="s", markersize=3)
 plt.xlabel("Epoch")
 plt.ylabel("Accuracy")
-plt.title("Accuracy Grafiği")
+plt.title("ResNet-18 — Train / Validation Accuracy")
 plt.legend()
-plt.grid()
-plt.show()
+plt.grid(True, alpha=0.3)
+plt.ylim(0, 1.02)
+plt.tight_layout()
+plt.savefig(OUT_DIR / f"{prefix}_train_val_accuracy.png", dpi=150)
+plt.close()
+
+# ==============================
+# PNG: confusion matrix
+# ==============================
+fig, ax = plt.subplots(figsize=(6, 5))
+im = ax.imshow(cm, interpolation="nearest", cmap=plt.cm.Blues)
+plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+ax.set_xticks(np.arange(len(class_names)))
+ax.set_yticks(np.arange(len(class_names)))
+ax.set_xticklabels(class_names, rotation=45, ha="right")
+ax.set_yticklabels(class_names)
+ax.set_ylabel("True label")
+ax.set_xlabel("Predicted label")
+ax.set_title("ResNet-18 — Test Confusion Matrix")
+thresh = cm.max() / 2.0 if cm.size else 0
+for i in range(cm.shape[0]):
+    for j in range(cm.shape[1]):
+        ax.text(
+            j,
+            i,
+            format(cm[i, j], "d"),
+            ha="center",
+            va="center",
+            color="white" if cm[i, j] > thresh else "black",
+        )
+plt.tight_layout()
+plt.savefig(OUT_DIR / f"{prefix}_confusion_matrix.png", dpi=150)
+plt.close()
+
+# ==============================
+# TXT: metrikler
+# ==============================
+metrics_path = OUT_DIR / f"{prefix}_test_metrics.txt"
+with metrics_path.open("w", encoding="utf-8") as f:
+    f.write("Model: ResNet-18 (train_pretrained.py)\n")
+    f.write(f"Classes (index order): {class_names}\n")
+    f.write(f"Positive class for Precision/Recall: {class_names[hemorrhage_idx]} (index {hemorrhage_idx})\n\n")
+    f.write(f"Accuracy:  {acc:.6f}\n")
+    f.write(f"Precision (hemorrhage): {prec:.6f}\n")
+    f.write(f"Recall (hemorrhage):    {rec:.6f}\n\n")
+    f.write("Confusion matrix [rows=true, cols=pred]:\n")
+    f.write(np.array2string(cm))
+    f.write("\n\n")
+    f.write(classification_report(all_labels, all_preds, target_names=class_names))
+
+print(f"\nKaydedildi: {OUT_DIR / (prefix + '_train_val_loss.png')}")
+print(f"Kaydedildi: {OUT_DIR / (prefix + '_train_val_accuracy.png')}")
+print(f"Kaydedildi: {OUT_DIR / (prefix + '_confusion_matrix.png')}")
+print(f"Kaydedildi: {metrics_path}")
