@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+.venv/
+venv/
+.env
+.env.*
+!.env.example
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+build/
+
+# ML ağırlıkları (Git LFS veya harici dağıtım)
+weights/*.pt
+weights/*.pth
+*.pth
+*.pt
+
+# Büyük veri / CVAT dışa aktarımı (depoya koymayın)
+instances_default.json
+/data/
+
+# Çalışma çıktıları
+runs/
+artifacts/
+*.log
+
+# Web
+web/node_modules/
+web/dist/
+web/.vite/
+*.tsbuildinfo
+
+# IDE / OS
+.idea/
+.vscode/
+*.swp
+Thumbs.db
+Desktop.ini

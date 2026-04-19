@@ -1,0 +1,19 @@
+NeuroScan / beyin BT kanama — proje düzeni
+==========================================
+
+Kök (çalıştırılabilir)
+  api_server.py       FastAPI REST API
+  inference.py        Klasik ResNet18 / MyCNN çıkarımı
+  inference_coco.py   COCO eğitimli ResNet + U-Net çıkarımı
+  arayuz.py           Tkinter masaüstü arayüzü
+
+neurocv/              Eğitim veri işleme, modeller, loss, metrik
+scripts/              prepare_coco_split, train_*, evaluate, placeholder PNG
+web/                  React (Vite) ön yüz — kurulum: cd web && npm install
+weights/              Ağırlık dosyaları (.pt/.pth gitignore; README bakın)
+legacy/               Eski sabit yollu taslak betikler (duzenle, split_data, train_pretrained, mycnn_pre)
+
+Ortak komutlar
+  pip install -r requirements.txt
+  uvicorn api_server:app --host 127.0.0.1 --port 8765
+  cd web && npm run dev
