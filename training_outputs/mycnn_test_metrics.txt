@@ -1,0 +1,20 @@
+Model: MyCNN (training/train_mycnn.py)
+Classes (index order): ['hemorrhage', 'no_hemorrhage']
+Positive class for Precision/Recall: hemorrhage (index 0)
+
+Accuracy:  0.966667
+Precision (hemorrhage): 0.937500
+Recall (hemorrhage):    1.000000
+
+Confusion matrix [rows=true, cols=pred]:
+[[15  0]
+ [ 1 14]]
+
+               precision    recall  f1-score   support
+
+   hemorrhage       0.94      1.00      0.97        15
+no_hemorrhage       1.00      0.93      0.97        15
+
+     accuracy                           0.97        30
+    macro avg       0.97      0.97      0.97        30
+ weighted avg       0.97      0.97      0.97        30

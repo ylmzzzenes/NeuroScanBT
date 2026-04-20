@@ -1,0 +1,20 @@
+Model: ResNet-18 (training/train_resnet18.py)
+Classes (index order): ['hemorrhage', 'no_hemorrhage']
+Positive class for Precision/Recall: hemorrhage (index 0)
+
+Accuracy:  0.966667
+Precision (hemorrhage): 1.000000
+Recall (hemorrhage):    0.933333
+
+Confusion matrix [rows=true, cols=pred]:
+[[14  1]
+ [ 0 15]]
+
+               precision    recall  f1-score   support
+
+   hemorrhage       1.00      0.93      0.97        15
+no_hemorrhage       0.94      1.00      0.97        15
+
+     accuracy                           0.97        30
+    macro avg       0.97      0.97      0.97        30
+ weighted avg       0.97      0.97      0.97        30
