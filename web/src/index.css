@@ -1,0 +1,38 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  @apply bg-neuro-void text-slate-200 antialiased min-h-screen;
+  background-image: radial-gradient(
+      ellipse 120% 80% at 50% -30%,
+      rgba(45, 212, 191, 0.08),
+      transparent
+    ),
+    radial-gradient(
+      ellipse 60% 40% at 100% 50%,
+      rgba(167, 139, 250, 0.06),
+      transparent
+    ),
+    #05070c;
+}
+
+.glass-panel {
+  @apply rounded-2xl border backdrop-blur-xl;
+  border-color: rgba(255, 255, 255, 0.08);
+  background-color: rgba(255, 255, 255, 0.03);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.text-gradient {
+  @apply bg-clip-text text-transparent bg-gradient-to-r from-neuro-ice via-neuro-cyan to-neuro-violet;
+}
